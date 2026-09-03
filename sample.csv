@@ -1,3 +1,4 @@
-id,value,qty
-A,10,2
-B,20,3
+patient_id,age,gender,weight,scr,dose_mg,interval_hours
+PT-01,65,M,78.0,1.2,1250.0,12.0
+PT-02,45,F,62.0,0.8,1000.0,12.0
+PT-03,72,M,85.0,2.1,1000.0,24.0

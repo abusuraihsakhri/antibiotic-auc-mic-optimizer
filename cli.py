@@ -145,7 +145,7 @@ def interactive_cli() -> None:
             print(f"Unknown command: {line}. Type 'help'.")
 
 
-def main() -> None:
+def main(argv: List[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Antibiotic AUC/MIC Optimizer & Precision Pharmacokinetics Engine")
     parser.add_argument("--demo", action="store_true", help="Run complete benchmark demonstration")
     parser.add_argument("--interactive", "-i", action="store_true", help="Launch interactive shell")
@@ -153,16 +153,17 @@ def main() -> None:
     parser.add_argument("--batch", nargs=2, metavar=("INPUT_CSV", "OUTPUT_CSV"), help="Batch process patient CSV")
     parser.add_argument("--vanco", nargs="+", help="Vancomycin: <age> <M/F> <wt_kg> <scr> <dose_mg> <interval_h> [mic]")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.batch:
         inp, out = args.batch
         res = process_csv(inp, out)
         print(f"Successfully processed {len(res)} cases from {inp} -> {out}")
+        return 0
     elif args.vanco:
         if len(args.vanco) < 6:
-            print("Error: Required arguments: <age> <M/F> <wt_kg> <scr> <dose_mg> <interval_h> [mic]")
-            sys.exit(1)
+            print("Error: Required arguments: <age> <M/F> <wt_kg> <scr> <dose_mg> <interval_h> [mic]", file=sys.stderr)
+            return 1
         age = int(args.vanco[0])
         gender = args.vanco[1]
         wt = float(args.vanco[2])
@@ -180,11 +181,15 @@ def main() -> None:
             print(f"Target Achieved : {res.target_achieved}")
             print(f"Risk Band       : {res.nephrotoxicity_risk}")
             print(f"Recommendation  : {res.recommended_regimen}")
+        return 0
     elif args.interactive:
         interactive_cli()
+        return 0
     else:
         run_demo_evaluation(json_out=args.json)
+        return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
+

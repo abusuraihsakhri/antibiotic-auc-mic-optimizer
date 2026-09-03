@@ -186,5 +186,33 @@ class TestCSVBatchAssessor(unittest.TestCase):
             self.assertTrue(os.path.exists(out))
 
 
+class TestCLI(unittest.TestCase):
+    def test_cli_demo_json(self):
+        from cli import main
+        import io
+        from unittest.mock import patch
+        with patch("sys.stdout", new=io.StringIO()) as fake_out:
+            code = main(["--demo", "--json"])
+            self.assertEqual(code, 0)
+            self.assertIn("patient", fake_out.getvalue())
+
+    def test_cli_vanco(self):
+        from cli import main
+        code = main(["--vanco", "60", "M", "75", "1.1", "1250", "12", "1.0"])
+        self.assertEqual(code, 0)
+
+    def test_cli_batch(self):
+        from cli import main
+        import tempfile
+        sample_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sample.csv")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_file = os.path.join(tmpdir, "out_batch.csv")
+            code = main(["--batch", sample_path, out_file])
+            self.assertEqual(code, 0)
+            self.assertTrue(os.path.exists(out_file))
+
+
 if __name__ == "__main__":
     unittest.main()
+
+

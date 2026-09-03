@@ -1,158 +1,108 @@
-# Antibiotic AUC MIC Optimizer
+# Antibiotic AUC/MIC Precision Pharmacokinetics Optimizer
 
-> **Domain:** Cardiovascular Medicine & Hemodynamic Analytics  
-> **Reference Guidelines & Standards:** `AHA/ACC Practice Guidelines & ESC Clinical Standards`
+A pure Python clinical pharmacokinetics, therapeutic drug monitoring (TDM), and precision antimicrobial dosing engine implementing:
+- **Cockcroft-Gault Creatinine Clearance & Devine Anthropometrics:**
+  $$\text{CrCl} = \frac{(140 - \text{Age}) \times \text{Weight}_{\text{dosing}}}{72 \times \text{SCr}} \times (0.85 \text{ if female})$$
+  - Utilizes Devine Ideal Body Weight (IBW) and Adjusted Body Weight ($ABW_{0.4}$) when actual weight exceeds $120\%$ IBW.
+- **Vancomycin $\text{AUC}_{24}/\text{MIC}$ Bayesian/Analytical Precision Solver:**
+  - 2020 ASHP/IDSA/PIDS/SIDP Consensus Guidelines targeting steady-state $\text{AUC}_{24}/\text{MIC}_{\text{BMD}} = 400 - 600\text{ mg}\cdot\text{h/L}$.
+  - Sawchuk-Zaske paired level elimination rate: $k_{el} = \frac{\ln(C_{\text{peak}} / C_{\text{trough}})}{\Delta t}$.
+  - Matzke population clearance fallback: $k_{el} = 0.00083 \times \text{CrCl} + 0.0044\text{ h}^{-1}$, $V_d = 0.70\text{ L/kg}$.
+  - Acute Kidney Injury (AKI) Nephrotoxicity risk stratification: Low ($<400$), Optimal ($400-600$), Elevated ($601-800$), Severe ($>800$).
+  - Automatic dose titration scaling regimens to the $500\text{ mg}\cdot\text{h/L}$ consensus midpoint in $250\text{ mg}$ steps.
+- **Aminoglycoside Concentration-Dependent Optimization:**
+  - Hartford high-dose extended-interval nomogram targeting $C_{\text{max}}/\text{MIC} \ge 8 - 10$ with complete trough clearance.
+- **Beta-Lactam Time-Dependent Target Attainment:**
+  - Evaluates $\%fT_{>\text{MIC}}$ and calculates continuous infusion delivery rates: $R_{\text{inf}} = \frac{(\text{Target} \times \text{MIC}) \times \text{CL}}{f_u}$.
+- **Monte Carlo Probability of Target Attainment (PTA):**
+  - Log-normal stochastic population parameter sampling across patient cohorts to quantify target attainment percentages.
+- **High-Throughput Batch Patient CSV Processing:** Ingests electronic health record datasets for ward and ICU surveillance.
 
-<div align="center">
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg?logo=fastapi&logoColor=white)
-![Audit Trail](https://img.shields.io/badge/Audit-HMAC--SHA256_Tamper--Evident-brightgreen.svg)
-![Zero-PHI Guard](https://img.shields.io/badge/Guard-Zero--PHI_Outbound-blue.svg)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)
-
-</div>
-
----
-
-## 📖 What It Does
-
-Antibiotic AUC/MIC Optimizer & Precision Pharmacokinetics Engine.
-
-Mathematical & Clinical Formulas Implemented:
-1. Cockcroft-Gault Creatinine Clearance (CrCl) with Devine IBW & Adjusted BW:
-   - CrCl = [(140 - Age) * DosingWeight / (72 * SCr)] * (0.85 if Female)
-2. Vancomycin AUC24/MIC Optimization (2020 ASHP/IDSA Consensus Target 400-600 mg*h/L):
-   - Sawchuk-Zaske paired level elimination: kel = ln(C_peak / C_trough) / dt
-   - Matzke population elimination fallback: kel = 0.00083 * CrCl + 0.0044 (/hr)
-   - Volume of Distribution: Vd = 0.70 L/kg
-   - Clearance: CL = kel * Vd
-   - Steady-State AUC24 = DailyDose / CL
-   - Target Dose Scaler to 500 mg*h/L midpoint in 250 mg increments
-   - AKI nephrotoxicity risk grading (Low <400, Target 400-600, Elevated 600-800, High >800)
-3. Linear & Log-Linear Trapezoidal AUC Integration:
-   - Linear trapezoid: AUC = 0.5 * (C1 + C2) * dt
-   - Log-linear elimination trapezoid: AUC = (C1 - C2) / ln(C1 / C2) * dt
-4. Aminoglycoside Cmax/MIC Concentration-Dependent Optimization:
-   - Target Cmax/MIC >= 8 - 10 (Hartford high-dose extended-interval nomogram)
-5. Fluoroquinolone AUC24/MIC Optimization:
-   - Target AUC24/MIC >= 125 for Gram-negative bacteremia, >= 30 for S. pneumoniae
-6. Beta-Lactam Time-Dependent (%fT>MIC) & Continuous Infusion Solver:
-   - t_>MIC = ln(fu * Cmax / MIC) / kel; %fT>MIC = min(100, t_>MIC / tau * 100)
-   - Continuous infusion rate: R_inf = (Target_x_MIC * MIC * CL) / fu
-7. Monte Carlo Probability of Target Attainment (PTA) & Cumulative Fraction of Response (CFR):
-   - Log-normal stochastic parameter sampling across patient cohorts and MIC distributions.
-
-Author: Dr. Abu Suraih Sakhri
-License: MIT
-
-AUC/MIC optimization enrichment features for antibiotic-auc-mic-optimizer.
-
-Implements three high-impact items from specifications on vancomycin
-pharmacokinetics (linear one-compartment model):
-
-    AUC24 at steady state = total daily dose / CL, with CL = kel x Vd.
-    kel from paired levels: kel = ln(Cpeak/Ctrough) / dt.
-    Population fallback (Matzke): kel = 0.00083 x CrCl + 0.0044 per hour,
-    Vd = 0.7 L/kg.
-
-1. AUC/MIC target optimization against the 2021 ASHP/IDSA consensus window
-   of 400-600 mg*h/L for MRSA, with automatic dose scaling to the 500
-   midpoint in 250 mg steps.
-2. Nephrotoxicity risk quantification: graded AKI-risk bands rising above
-   AUC24 > 600, with the risk gradient reported alongside attainment.
-3. Monte Carlo probability-of-target-attainment simulation over population PK
-   variability, plus a two-point vs multi-point sampling accuracy comparison.
-
-Author: Dr. Abu Suraih Sakhri
-License: MIT
+Requires Python standard library only (zero external runtime dependencies).
 
 ---
 
-## ⚙️ Key Capabilities & Algorithmic Modules
+## Precision PK/PD Consensus Targets
 
-### 🔬 Core Algorithmic & Evaluation Engines
-
-- **`NephrotoxicityBand`** — dedicated module for nephrotoxicity band evaluation and state verification.
-- **`PatientProfile`** — dedicated module for patient profile evaluation and state verification.
-- **`VancoAUCResult`** — dedicated module for vanco a u c result evaluation and state verification.
-- **`AminoglycosideResult`** — dedicated module for aminoglycoside result evaluation and state verification.
-- **`BetaLactamResult`** — dedicated module for beta lactam result evaluation and state verification.
-- **`MonteCarloPTAResult`** — dedicated module for monte carlo p t a result evaluation and state verification.
+| Drug Class | Pharmacodynamic Driver | Clinical Target | Clinical Endpoint |
+|:-----------|:-----------------------|:----------------|:------------------|
+| **Vancomycin** | $\text{AUC}_{24}/\text{MIC}$ | $400 - 600\text{ mg}\cdot\text{h/L}$ | MRSA bacteremia eradication & nephrotoxicity minimization |
+| **Aminoglycosides** | $C_{\text{max}}/\text{MIC}$ | $\ge 8 - 10$ | Concentration-dependent bactericidal kill & post-antibiotic effect |
+| **Beta-Lactams** | $\%fT_{>\text{MIC}}$ | $40\% - 100\%$ of dosing interval | Time-dependent cell wall synthesis inhibition |
+| **Fluoroquinolones** | $\text{AUC}_{24}/\text{MIC}$ | $\ge 125$ (Gram-negative), $\ge 30$ (S. pneumoniae) | Bacterial eradication & prevention of resistance |
 
 ---
 
-## 📐 Mathematical Formulation & Logic
+## Features
 
-```text
-  Mathematical & Clinical Formulas Implemented:
-  """Devine formula for Ideal Body Weight in kg."""
-  ibw = calculate_ibw(gender, height_cm) if height_cm else weight_kg
-  """Matzke population formula: kel = 0.00083 * CrCl + 0.0044 (/hr)."""
-  kel = calculate_matzke_kel(renal["crcl_ml_min"])
-```
+- **ASHP/IDSA 2020 Consensus Compliance:** Replaces trough-only monitoring with rigorous area-under-the-curve optimization.
+- **Linear & Log-Linear Trapezoidal Integration:** Exact non-compartmental integration over empirical serum time-concentration curves.
+- **Nephrotoxicity Risk Mitigation:** Proactively alerts clinicians to steep increases in odds of acute kidney injury when exposure exceeds $600\text{ mg}\cdot\text{h/L}$.
+- **Batch CSV Cohort Processing:** Rapidly processes cohorts of ICU/ward patients with automated regimen recommendations.
 
 ---
 
-## 💻 CLI Quickstart & Usage
+## Installation & Requirements
 
-### 1. Guided Interactive Mode
+- Python 3.10+ (tested on 3.10, 3.11, 3.12)
+- Zero external runtime dependencies. `pytest` is optional for running tests.
+
 ```bash
-python cli.py
+git clone https://github.com/abusuraihsakhri/antibiotic-auc-mic-optimizer.git
+cd antibiotic-auc-mic-optimizer
 ```
 
-### 2. Direct Parameterized Evaluation
+---
+
+## CLI Usage
+
+### 1. Run Complete PK/PD Benchmark Demonstration
 ```bash
-python cli.py --demo <value> --interactive <value> --json <value> --batch <value>
+python cli.py --demo --json
 ```
 
-### Parameter Reference
-- `--demo`: Specifies input measurement or parameter value.
-- `--interactive`: Specifies input measurement or parameter value.
-- `--json`: Specifies input measurement or parameter value.
-- `--batch`: Specifies input measurement or parameter value.
-- `--vanco`: Specifies input measurement or parameter value.
+### 2. Individual Vancomycin Regimen Assessment
+```bash
+# Format: <age> <gender M/F> <weight_kg> <serum_creatinine> <dose_mg> <interval_hours> [mic]
+python cli.py --vanco 65 M 78.0 1.2 1250 12 1.0
+```
 
-### Input Data Schema
-
-| Field | Description | Requirement |
-|:------|:------------|:------------|
-| `id` | Parameter / observation metric | Required |
-| `value` | Parameter / observation metric | Required |
-| `qty` | Parameter / observation metric | Required |
+### 3. Batch Process Patient CSV
+```bash
+python cli.py --batch sample.csv results.csv
+```
 
 ---
 
-## 🛡️ Security & Enterprise Architecture
+## Python API Quickstart
 
-* **Zero-PHI Outbound Interceptor:** Active AST and regex inspection blocking SSNs, MRNs, phone numbers, and patient identifiers.
-* **Tamper-Evident HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs for every evaluation and state transition.
-* **Air-Gapped LLM Reasoning Adapter:** Agnostic integration for local Ollama instances (`llama3`, `mistral`), Claude 3.5 Sonnet, GPT-4o, and deterministic test mocks.
-* **Active Learning Bayesian Calibration:** Dynamic tracker updating worker reliability weights and monitoring Brier calibration drift.
-* **FastAPI & Prometheus Telemetry:** Exposes OpenAPI 3.1 REST endpoints and operational Prometheus metrics (`/metrics`).
+```python
+from auc_mic import PatientProfile, optimize_vancomycin
+
+patient = PatientProfile(
+    patient_id="ICU-402",
+    age_years=62,
+    gender="Male",
+    weight_kg=80.0,
+    height_cm=178.0,
+    serum_creatinine_mg_dl=1.1,
+)
+
+res = optimize_vancomycin(patient, dose_mg=1250.0, interval_hours=12.0, mic_mg_l=1.0)
+
+print(f"Calculated CrCl: {res.renal_crcl_ml_min} mL/min")
+print(f"Steady-state AUC24: {res.auc24_mg_h_l} mg*h/L")
+print(f"Target Achieved: {res.target_achieved}")
+print(f"Risk Band: {res.nephrotoxicity_risk}")
+print(f"Recommended Regimen: {res.recommended_regimen}")
+```
 
 ---
 
-## 🧪 Testing & Verification
+## Running Tests
 
-Run the automated test suite:
+Run the test suite using standard `unittest` or `pytest`:
 
 ```bash
 pytest -v
-```
-
-Execute high-throughput batch simulation benchmarks:
-
-```bash
-python simulator.py --tasks 1000 --concurrency 8
-```
-
----
-
-## 🐳 Container Deployment
-
-```bash
-docker build -t antibiotic-auc-mic-optimizer .
-docker run -p 8000:8000 antibiotic-auc-mic-optimizer
 ```
